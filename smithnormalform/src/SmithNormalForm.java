@@ -7,92 +7,123 @@ public class SmithNormalForm {
 	public static void main(String[] args) {
 
 		Rat [][] A = inputMatrix();
-		Poly1 [][] M = makePolyMatrix(A);
+		Poly1 [][] P = makePolyMatrix(A);
 
 		System.out.println("下記多項式行列のSmith標準形を求めます:");
 		System.out.println("******************************************************");
-		showMatrix(M);
-		calculateSmithNormalForm(M);
+		showMatrix(P);
+		calculateSmithNormalForm(P);
 		System.out.println("******************************************************");
 		System.out.println("実行結果は以下の通りです");
-		showMatrix(M);
+		showMatrix(P);
 	}
 
-	public static void calculateSmithNormalForm(Poly1 [][] A) {
-		int n = A.length;
+	public static void calculateSmithNormalForm(Poly1 [][] P) {
+		int n = P.length;
 		for (int d=0; d<n-1; d++) {
-			int [] a = searchNonZeroPolynomial(A,d,d);
+			// 1. (d, d)成分より右下の領域から最小次数の非ゼロ多項式を探し(d, d)と入れ替え
+			int [] a = searchNonZeroPolynomial(P,d,d);
 			if(a[0]==-1) {
 				break;
 			}
 			int row = a[0];
 			int column = a[1];
-			rowReplace(A,d,row);
-			columnReplace(A,d,column);
-
-			while(!loopJudge(A,d)) {
-				deleteRow(A,d);
-				deleteColumn(A,d);
+			rowReplace(P,d,row);
+			columnReplace(P,d,column);
+			// 2. d行・d列の (d, d)成分以外がすべて0になるまで互除法で消去
+			// loopJudge は全要素が0のときtrueを返すため、!で反転してwhileループを継続する
+			while(!loopJudge(P,d)) {
+				deleteRow(P,d);
+				deleteColumn(P,d);
 			}
-			int unDivisibleRow = 1;
-			while (unDivisibleRow!=-1) {		
-				unDivisibleRow = searchUnDivisiblePolynomial(A,A[d][d],d);
-				if (unDivisibleRow!=-1) {
-					rowPlus(A,unDivisibleRow,d);
-					while(!loopJudge(A,d)) {
-						deleteRow(A,d);
-						deleteColumn(A,d);
-					}
+			// 3. (d, d)成分より右下の領域にP[d][d]で割り切れない成分があれば行を加算して再消去
+			int unDivisibleRow = searchUnDivisiblePolynomial(P,P[d][d],d);
+			while (unDivisibleRow!=-1) {
+				rowPlus(P,unDivisibleRow,d);
+				while(!loopJudge(P,d)) {
+					deleteRow(P,d);
+					deleteColumn(P,d);
 				}
+				unDivisibleRow = searchUnDivisiblePolynomial(P,P[d][d],d);
 			}
 		}
-
+		// 4. 各対角成分(単因子)の係数たちの分母を払って最大公約数で割ることにより正規化
 		for (int d=0; d<n; d++) {
-			Poly1.completion(A[d][d]);
+			Poly1.completion(P[d][d]);
 		}
-
 	}
-	public static boolean loopJudge(Poly1 [][] A, int d) {
 
-		for (int j=d+1; j<A[0].length; j++) {
-			if (A[d][j].getSize()!=0) {
+
+	public static boolean loopJudge(Poly1 [][] P, int d) {
+		for (int j=d+1; j<P[0].length; j++) {
+			if (P[d][j].getSize()!=0) {
 				return false;
 			}
 		}
-		for (int i=d+1; i<A.length; i++) {
-			if (A[i][d].getSize()!=0) {
+		for (int i=d+1; i<P.length; i++) {
+			if (P[i][d].getSize()!=0) {
 				return false;
 			}
 		}
-
 		return true;
 	}
 
-	public static void deleteRow(Poly1 [][] A, int d) {
-		for (int j=d+1; j<A[0].length; j++) {
-			while (A[d][j].getSize()!=0) {
+	public static void deleteRow(Poly1 [][] P, int d) {//d行目の(d+1)列目以降を互除法により消去する
+		for (int j=d+1; j<P[0].length; j++) {
+			while (P[d][j].getSize()!=0) {
 				Poly1 q = new Poly1();
-				q =(A[d][j]).quotient(A[d][d])[0];
-				columnOperation(A,q,d,j);//j列目からq倍したd列を引く
-				if (A[d][j].getSize() != 0) {
-					columnReplace(A,d,j);
+				q =(P[d][j]).quotient(P[d][d])[0];
+				columnOperation(P,q,d,j);//j列目からq倍したd列を引く
+				if (P[d][j].getSize() != 0) {
+					columnReplace(P,d,j);
 				}
 			}
 		}
 	}
-	public static void deleteColumn(Poly1 [][] A, int d) {
-		for (int i=d+1; i<A.length; i++) {
-			while(A[i][d].getSize()!=0) {
+	public static void deleteColumn(Poly1 [][] P, int d) {//d列目の(d+1)行目以降を互除法により消去する
+		for (int i=d+1; i<P.length; i++) {
+			while(P[i][d].getSize()!=0) {
 				Poly1 q = new Poly1();
-				q =(A[i][d]).quotient(A[d][d])[0];
-				rowOperation(A,q,d,i);
-				if (A[i][d].getSize() != 0) {
-					rowReplace(A,d,i);
+				q =(P[i][d]).quotient(P[d][d])[0];
+				rowOperation(P,q,d,i);
+				if (P[i][d].getSize() != 0) {
+					rowReplace(P,d,i);
 				}
 			}
 		}
 	}
-	public static Rat[][] inputMatrix(){
+	public static void rowPlus(Poly1 [][] P, int p, int q) { //Pのq行目にp行目を足す
+		for (int j = 0; j< P[0].length; j++) {
+			P[q][j] = P[q][j].plus(P[p][j]);
+		}
+	}
+	public static void rowOperation(Poly1 [][] P, Poly1 f, int p, int q) { //Pのp行目をf倍したものをq行目から引く
+		for (int j = 0; j< P[0].length; j++) {
+			P[q][j] = P[q][j].minus(f.multiple(P[p][j]));
+		}
+	}
+	public static void columnOperation(Poly1 [][] P, Poly1 f, int p, int q) { //Pのp列目をf倍したものをq列目から引く
+		for (int i = 0; i< P.length; i++) {
+			P[i][q] = P[i][q].minus(f.multiple(P[i][p]));
+		}
+	}
+	public static void rowReplace(Poly1 [][] P, int p, int q) {// Pのp行目とq行目を入れ替える
+		Poly1 dummy = new Poly1();
+		for (int j = 0; j < P[0].length; j++) {
+			dummy = P[p][j];
+			P[p][j] = P[q][j];
+			P[q][j] = dummy;
+		}
+	}
+	public static void columnReplace(Poly1 [][] P, int p, int q) {// Pのp列目とq列目を入れ替える
+		Poly1 dummy = new Poly1();
+		for (int i = 0; i < P.length; i++) {
+			dummy = P[i][p];
+			P[i][p] = P[i][q];
+			P[i][q] = dummy;
+		}
+	}
+	public static Rat[][] inputMatrix(){//行列の入力
 		Scanner sc = new Scanner(System.in);
 		int n = sc.nextInt();
 		if (n<=1) {
@@ -141,27 +172,27 @@ public class SmithNormalForm {
 		//sc.close();
 		return M;
 	}
-	public static Poly1 [][] makePolyMatrix(Rat [][] M){
-		Poly1 [][] A = new Poly1[M.length][M[0].length];
+	public static Poly1 [][] makePolyMatrix(Rat [][] M){//xE-Aを作る
+		Poly1 [][] P = new Poly1[M.length][M[0].length];
 		for (int i=0; i<M.length; i++) {
 			for (int j=0; j<M[0].length; j++) {
-				A[i][j] = new Poly1();
+				P[i][j] = new Poly1();
 				if (M[i][j].getNum()!=0) {
-					A[i][j].putTerm(0, M[i][j].mul(new Rat(-1,1)));
+					P[i][j].putTerm(0, M[i][j].mul(new Rat(-1,1)));
 				}
 				if (i==j) {
-					A[i][j].putTerm(1, new Rat(1,1));
+					P[i][j].putTerm(1, new Rat(1,1));
 				}
 			}
 		}
-		return A;
+		return P;
 	}
-	public static int searchUnDivisiblePolynomial(Poly1[][] A, Poly1 f, int d) {
-		int n = A.length;
-		int a = -1;
+	public static int searchUnDivisiblePolynomial(Poly1[][] P, Poly1 f, int d) {//(d,d)の右下領域にfで割り切れる成分を探す
+		int n = P.length;
+		int a = -1;//割り切れる成分がなければ-1を返す
 		label:for (int i=d+1; i<n; i++) {
 			for (int j=d+1; j<n; j++) {
-				if (A[i][j].quotient(f)[1].getSize()!=0) {
+				if (P[i][j].quotient(f)[1].getSize()!=0) {
 					a = i;
 					break label;
 				}
@@ -170,79 +201,30 @@ public class SmithNormalForm {
 		return a;
 	}
 
-	public static int[] searchNonZeroPolynomial(Poly1[][] A, int p, int q) {
+	public static int[] searchNonZeroPolynomial(Poly1[][] P, int p, int q) {//(p,q)の右下領域から非ゼロ成分を探す
 		int [] a = new int[2];
 		a[0] = -1;
 		int deg = Integer.MAX_VALUE;
-		for (int i=p; i<A.length; i++) {
-			for (int j=q; j<A[0].length; j++) {
-				if (A[i][j].getSize() != 0) {
-					deg = min(deg,A[i][j].getDegree());
-				}
-			}
-		}
-
-		label:for (int i=p; i<A.length; i++) {
-			for (int j=q; j<A[0].length; j++) {
-				if (A[i][j].getDegree() == deg) {
+		for (int i=p; i<P.length; i++) {
+			for (int j=q; j<P[0].length; j++) {
+				if (P[i][j].getSize() != 0 && P[i][j].getDegree()<deg) {
+					deg =  P[i][j].getDegree();
 					a[0] = i;
 					a[1] = j;
-					break label;
 				}
 			}
 		}
-
 		return a;
 	}
-
-	public static int min(int a, int b) {
-		if(a < b) {
-			return a;
-		} else {
-			return b;
-		}
-	}
-
-	public static void rowPlus(Poly1 [][] A, int p, int q) { //Aのq行目にp行目を足す
-		for (int j = 0; j< A[0].length; j++) {
-			A[q][j] = A[q][j].plus(A[p][j]);
-		}
-	}
-	public static void rowOperation(Poly1 [][] A, Poly1 f, int p, int q) { //Aのp行目をf倍したものをq行目から引く
-		for (int j = 0; j< A[0].length; j++) {
-			A[q][j] = A[q][j].minus(f.multiple(A[p][j]));
-		}
-	}
-	public static void columnOperation(Poly1 [][] A, Poly1 f, int p, int q) { //Aのp列目をf倍したものをq列目から引く
-		for (int i = 0; i< A.length; i++) {
-			A[i][q] = A[i][q].minus(f.multiple(A[i][p]));
-		}
-	}
-	public static void rowReplace(Poly1 [][] A, int p, int q) {// Aのp行目とq行目を入れ替える
-		Poly1 dummy = new Poly1();
-		for (int j = 0; j < A[0].length; j++) {
-			dummy = A[p][j];
-			A[p][j] = A[q][j];
-			A[q][j] = dummy;
-		}
-	}
-	public static void columnReplace(Poly1 [][] A, int p, int q) {// Aのp列目とq列目を入れ替える
-		Poly1 dummy = new Poly1();
-		for (int i = 0; i < A.length; i++) {
-			dummy = A[i][p];
-			A[i][p] = A[i][q];
-			A[i][q] = dummy;
-		}
-	}
-	public static void showMatrix(Poly1[][] A) {
-		for (int i=0; i<A.length; i++) {
-			for (int j=0; j<A[0].length; j++) {
-				if (A[i][j].getSize()==0) {
+	public static void showMatrix(Poly1[][] P) {//行列表示
+		for (int i=0; i<P.length; i++) {
+			for (int j=0; j<P[0].length; j++) {
+				if (P[i][j].getSize()==0) {
 					System.out.print("0");
 				} else {
-					Poly1.show(A[i][j]);
+					Poly1.show(P[i][j]);
 				}
-				if (j<A[0].length-1) {
+				if (j<P[0].length-1) {
 					System.out.print(", ");
 				}
 			}
@@ -265,17 +247,17 @@ class Poly1 {//多項式クラス(有理係数 1変数)
 	public Poly1(Poly1 g) {
 		this.f = new TreeMap<>(g.getMap());
 	}
-	public Set<Integer> getMonomialSet() {
+	public Set<Integer> getMonomialSet() {//項の集合を取得する（多項式の台）
 		return this.f.keySet();
 	}
-	public Rat getCoeff(Integer mono) {
+	public Rat getCoeff(Integer mono) {//項の係数を取得する
 		if (f.containsKey(mono)) {
 			return this.f.get(mono);
 		} else {
 			return new Rat(0,1);
 		}
 	}
-	public int getDegree(){
+	public int getDegree(){//次数を取得する
 		if (this.f.size()>0) {
 			return this.f.lastKey();
 		} else {
@@ -285,25 +267,25 @@ class Poly1 {//多項式クラス(有理係数 1変数)
 	public int getSize(){
 		return this.f.size();
 	}
-	public void putTerm(Integer mono, Rat c) {
+	public void putTerm(Integer mono, Rat c) {//項に係数を設定する
 		if(mono >=0 && c.getNum()!=0) {
 			this.f.put(mono,c);
 		}
 	}
-	public void putTerm(Integer mono, int num, int denom) {
+	public void putTerm(Integer mono, int num, int denom) {//項に係数を設定する
 		if(mono >=0 && num!=0) {
 			this.f.put(mono, new Rat(num,denom));
 		}
 	}
-	public void removeTerm(Integer mono) {
+	public void removeTerm(Integer mono) {//項を取り除く
 		if (f.containsKey(mono)) {
 			this.f.remove(mono);
 		}
 	}
-	public boolean contains(Integer mono) {
+	public boolean contains(Integer mono) {//項が含まれるか
 		return this.f.containsKey(mono);
 	}
-	public Poly1 plus(Poly1 g) {
+	public Poly1 plus(Poly1 g) {//多項式の和
 		Poly1 h = new Poly1();//f+g
 		Set<Integer> monomialSet = new HashSet<>();//supp(f)∪supp(g) (f,gに現れる単項式の合併集合)
 
@@ -331,7 +313,7 @@ class Poly1 {//多項式クラス(有理係数 1変数)
 		return h;
 	}
 
-	public Poly1 minus(Poly1 g) {
+	public Poly1 minus(Poly1 g) {//多項式の差
 		Poly1 minus_g = new Poly1();
 		for (Integer mono : g.getMonomialSet()) {
 			Rat negativeCoeff = (new Rat(-1,1)).mul(g.getCoeff(mono));
@@ -342,13 +324,13 @@ class Poly1 {//多項式クラス(有理係数 1変数)
 		return copy_f.plus(minus_g);
 	}
 
-	public Poly1 multiple(Poly1 g) {
+	public Poly1 multiple(Poly1 g) {//多項式の積
 		Poly1 h = new Poly1();//f×g
 
 		//f,gの単項式mf, mgを一つずつ取り出し、掛け合わせたものを作り、hに追加していく
 		for (Integer mf : this.f.keySet()) {
 			for (Integer mg : g.getMonomialSet()) {
-				Integer mh = mf + mg;//mh = mf×mgを計算
+				Integer mh = mf + mg;
 				Rat newCoeff = (this.f.get(mf)).mul(g.getCoeff(mg));
 				if (h.contains(mh)) {//既にmhがhに入っている場合の処理
 					Rat oldCoeff = h.getCoeff(mh);
@@ -358,7 +340,7 @@ class Poly1 {//多項式クラス(有理係数 1変数)
 					} else {//係数の和が0であれば項を削除
 						h.removeTerm(mh);
 					}
-				} else {//mhがhにない入ってない場合の処理
+				} else {//mhがhに入ってない場合の処理
 					h.putTerm(mh, newCoeff);
 				}
 			}
@@ -375,17 +357,35 @@ class Poly1 {//多項式クラス(有理係数 1変数)
 			if (mono<d && p.getCoeff(mono).compare(new Rat(0,1))) {
 				System.out.print("+");
 			}
-			if(!p.getCoeff(mono).equal(new Rat(1,1))) {
-			Rat.show(p.getCoeff(mono));
-			}
-			if(mono>1) {
-				System.out.print("x^" + mono);
-			}
-			if(mono==1) {
-				System.out.print("x");
-			}
-			if (p.getCoeff(mono).equal(new Rat(1,1)) && mono==0) {
-				System.out.print("1");
+
+			if(p.getCoeff(mono).equal(new Rat(1,1))) {//係数が1の場合
+				if(mono>1) {
+					System.out.print("x^" + mono);
+				}
+				if(mono==1) {
+					System.out.print("x");
+				}
+				if(mono==0) {
+					System.out.print("1");
+				}
+			}else if((p.getCoeff(mono).equal(new Rat(-1,1)))) {
+				if(mono>1) {
+					System.out.print("-x^" + mono);
+				}
+				if(mono==1) {
+					System.out.print("-x");
+				}
+				if(mono==0) {
+					System.out.print("-1");
+				}
+			} else {
+				Rat.show(p.getCoeff(mono));
+				if(mono>1) {
+					System.out.print("x^" + mono);
+				}
+				if(mono==1) {
+					System.out.print("x");
+				}
 			}
 		}
 	}
@@ -413,26 +413,26 @@ class Poly1 {//多項式クラス(有理係数 1変数)
 		pair[1] = p;
 		return pair;
 	}
-	public static void completion(Poly1 g) {
+	public static void completion(Poly1 g) {//多項式の係数の正規化
 		if (g.getSize() == 0) return;
 
 		long lcm = 1;
-		for (Integer mono : g.getMonomialSet()) {
+		for (Integer mono : g.getMonomialSet()) {//係数の分母たちの最小公倍数lcmを計算
 			lcm = Rat.lcm(lcm, g.getCoeff(mono).getDenom());
 		}
-		for (Integer mono : g.getMonomialSet()) {
+		for (Integer mono : g.getMonomialSet()) {//lcmを各係数に掛け算する(gを整数係数多項式にする)
 			Rat L = g.getCoeff(mono).mul(new Rat(lcm,1));
 			g.putTerm(mono, L);
 		}
-		long gcd = g.getCoeff(g.getDegree()).getNum();//gの最高次の係数の分子
+		long gcd = g.getCoeff(g.getDegree()).getNum();//gの係数たちの最大公約数gcdを計算
 		for (Integer mono : g.getMonomialSet()) {
 			gcd = Rat.gcd(gcd, g.getCoeff(mono).getNum());
 		}
-		for (Integer mono : g.getMonomialSet()) {
+		for (Integer mono : g.getMonomialSet()) {//gの係数たちをgcdで割り算する(gを原始多項式にする)
 			Rat D = g.getCoeff(mono).div(new Rat(gcd,1));
 			g.putTerm(mono, D);
 		}
-		if (!g.getCoeff(g.getDegree()).compare(new Rat(0,1))) {//gの最高次の係数が負の場合の処理
+		if (!g.getCoeff(g.getDegree()).compare(new Rat(0,1))) {//gの最高次の係数が負の場合、全体に-1をかけて整える
 			for (Integer mono : g.getMonomialSet()) {
 				Rat negativeCoeff =  g.getCoeff(mono).mul(new Rat(-1,1));
 				g.putTerm(mono, negativeCoeff);
@@ -448,7 +448,7 @@ class Rat {//有理数クラス
 	public Rat () {} //デフォルトコンストラクタ
 	public Rat(long num,long denom){
 		if (denom != 0) {
-			if (denom < 0) {
+			if (denom < 0) {//分母は必ず正になるよう正規化する
 				this.num = -num;
 				this.denom = -denom;
 			} else if (denom > 0) {
